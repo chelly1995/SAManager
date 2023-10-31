@@ -63,7 +63,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 
 
-//
+//  
 //  함수: MyRegisterClass()
 //
 //  용도: 창 클래스를 등록합니다.
@@ -132,12 +132,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
-//  H2K
+
     case WM_CREATE:
     {
     
         CmdManager::GetInst()->ParserCommandLine();
-        WCHAR szProjectPath[1024] = { 0 };
       
         if (ERROR_SUCCESS == CmdManager::GetInst()->CheckCmd())
         {
@@ -145,16 +144,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
             if(TRUE == CmdManager::GetInst()->CheckSinPath())
             {
-                if (ERROR_SUCCESS == ProjectManager::GetInst()->GetProjectList(CmdManager::GetInst()->GetSolutionPath()))
+                if (ERROR_SUCCESS == ProjectManager::GetInst()->GetSlnList(CmdManager::GetInst()->GetSolutionPath()))
                 {
                     DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, CmdManager::GetInst()->GetSolutionPath());
 
                     if (ERROR_SUCCESS == ProjectManager::GetInst()->GetInform())
                     {
                          ProjectManager::GetInst()->MakeCdprojFile(CmdManager::GetInst()->GetOutPath(), CmdManager::GetInst()->GetProductName());
-                         ProjectManager::GetInst()->MakePropertiesFile(CmdManager::GetInst()->GetOutPath(), CmdManager::GetInst()->GetProductName());
+                        
+                         if (TRUE == CmdManager::GetInst()->CheckAdd())
+                         {
+                             ProjectManager::GetInst()->AddPropertiesFile(CmdManager::GetInst()->GetOutPath(), CmdManager::GetInst()->GetProductName());
+                         }
+                         else
+                         {  
+                            ProjectManager::GetInst()->MakePropertiesFile(CmdManager::GetInst()->GetOutPath(), CmdManager::GetInst()->GetProductName());
+                         }
                     } 
-
                 }
             }
             else if(TRUE == CmdManager::GetInst()->CheckPinPath())
@@ -165,11 +171,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     if (ERROR_SUCCESS == ProjectManager::GetInst()->GetInform())
                     {
                         ProjectManager::GetInst()->MakeCdprojFile(CmdManager::GetInst()->GetOutPath(), CmdManager::GetInst()->GetProductName());
-                        ProjectManager::GetInst()->MakePropertiesFile(CmdManager::GetInst()->GetOutPath(), CmdManager::GetInst()->GetProductName());
+                        
+                        if (TRUE == CmdManager::GetInst()->CheckAdd())
+                        {
+                            ProjectManager::GetInst()->AddPropertiesFile(CmdManager::GetInst()->GetOutPath(), CmdManager::GetInst()->GetProductName());
+                        }
+                        else
+                        {
+                            ProjectManager::GetInst()->MakePropertiesFile(CmdManager::GetInst()->GetOutPath(), CmdManager::GetInst()->GetProductName());
+                        }
                     }
                 }
             }
-
         }
         else
         {
@@ -321,6 +334,20 @@ wstring CmdManager::GetPinPath()
     return szCmd;
 }
 
+wstring CmdManager::GetAdd()
+{
+    wstring szCmd;
+    map<wstring, wstring>::iterator iter;
+    iter = m_mapCommandLine.find(L"Add");
+    if (iter != m_mapCommandLine.end()) {
+        szCmd = iter->first.c_str();
+
+        DebugMsg(L"%s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, szCmd.c_str());
+    }
+
+    return szCmd;
+}
+
 WCHAR* CmdManager::GetOutPath()
 {
     WCHAR* szCmd = NULL; 
@@ -349,8 +376,8 @@ WCHAR* CmdManager::GetProductName()
 
 // 실행명령어 순서는 상관 x
 // 실행불가능한 명령어일 경우 프로그램 종료 
-// Sinpath, Pinpath, Outpath, Name 실행명령어가 아닐경우 프로그램 종료
-// 명령어 조합 체크 ex)  Sinpath + Outpath + Name, Pinpath + Outpath + Name
+// Sinpath, Pinpath, Outpath, Name, Add 실행명령어가 아닐경우 프로그램 종료
+// 명령어 조합 체크 ex)  Sinpath + Outpath + Name + (Add), Pinpath + Outpath + Name + (Add)
 int CmdManager::CheckCmd()
 {
     
@@ -362,7 +389,8 @@ int CmdManager::CheckCmd()
     OutpathIter = m_mapCommandLine.find(L"Outpath");
     map<wstring, wstring>::iterator NameIter;
     NameIter = m_mapCommandLine.find(L"Name");
-
+    map<wstring, wstring>::iterator AddIter;
+    AddIter = m_mapCommandLine.find(L"Add");
 
     if (SinpathIter != m_mapCommandLine.end())
     {
@@ -375,6 +403,14 @@ int CmdManager::CheckCmd()
             if (NameIter != m_mapCommandLine.end())
             {
                 DebugMsg(L"%s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, NameIter->first.c_str());
+                
+                if (AddIter != m_mapCommandLine.end())
+                {
+                    DebugMsg(L"%s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, AddIter->first.c_str());
+
+                    return ERROR_SUCCESS;
+                }
+               
                 return ERROR_SUCCESS;
             }
             else
@@ -388,7 +424,6 @@ int CmdManager::CheckCmd()
             DebugMsg(L"%s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, L"ERROR");
             return ERROR_INVALID_FUNCTION;
         }
-
     }
     else if (PinpathIter != m_mapCommandLine.end())
     {
@@ -400,7 +435,15 @@ int CmdManager::CheckCmd()
             if (NameIter != m_mapCommandLine.end())
             {
                 DebugMsg(L"%s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, NameIter->first.c_str());
+                
+                if (AddIter != m_mapCommandLine.end())
+                {
+                    DebugMsg(L"%s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, AddIter->first.c_str());
+                    return ERROR_SUCCESS;
+                }
+
                 return ERROR_SUCCESS;
+
             }
             else
             {
@@ -445,6 +488,23 @@ BOOL CmdManager::CheckPinPath()
     {
         return FALSE;
     }
+}
+
+BOOL CmdManager::CheckAdd()
+{
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLine(), &argc);
+
+    for (int i = 0; i < argc; i++)
+    {
+        DebugMsg(L" EJH Add %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, argv[i]);
+
+        if (0 == wcscmp(argv[i],L"Add"))
+        {
+            return TRUE;
+        }
+    }
+    return FALSE;
 }
 
 WCHAR* CmdManager::GetSolutionPath()

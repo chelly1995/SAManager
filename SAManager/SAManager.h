@@ -11,6 +11,7 @@ public:
 	void  ParserCommandLine();
 	wstring GetSinPath();
 	wstring GetPinPath();
+	wstring GetAdd();
 	WCHAR* GetOutPath();
 	WCHAR* GetProductName();
 	WCHAR* GetSolutionPath();
@@ -18,6 +19,7 @@ public:
 	
 	BOOL CheckSinPath();
 	BOOL CheckPinPath();
+	BOOL CheckAdd();
 	int CheckCmd();
 
 private:

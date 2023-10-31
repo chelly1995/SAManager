@@ -5,7 +5,7 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LocalDebuggerCommandArguments>Sinpath "D:\TFS\Development\DS\Solution\DS 5.0_vs2019.sln" Outpath "C:\Users\Security365\Desktop\cdproj" Name "DS"</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>Sinpath "D:\TFS\Development\DS\Solution\DS 5.0_vs2019.sln" Outpath "C:\Users\Security365\Desktop\Project\정적분석시스템개선프로그램\cdproj" Name "DS" Add</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>

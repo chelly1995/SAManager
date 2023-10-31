@@ -13,7 +13,8 @@
 #include <malloc.h>
 #include <memory.h>
 #include <tchar.h>
-
+#include <string.h>
+#include <io.h>
 
 #include <shellapi.h>
 #include <string>	// for 디버깅

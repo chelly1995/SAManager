@@ -23,7 +23,7 @@ ProjectManager::~ProjectManager()
 
 }
 
-int ProjectManager::GetProjectList(WCHAR* pSolutionPath)
+int ProjectManager::GetSlnList(WCHAR* pSolutionPath)
 {
 	if (NULL == pSolutionPath)
 		return ERROR_INVALID_PARAMETER;
@@ -69,12 +69,6 @@ int ProjectManager::GetProjectList(WCHAR* pSolutionPath)
 		SecureZeroMemory(szLine, 2048*2);
 	
 	}
-	
-	map<wstring, wstring>::iterator itor;
-	for (itor = m_mapProject.begin(); itor != m_mapProject.end(); itor++)
-	{
-		DebugMsg(L" EJH %s(%d) : Debug Msg [%s][%s]", __FUNCTIONW__, __LINE__, itor->first.c_str(), itor->second.c_str());
-	}
 
 	::fclose(fp);
 
@@ -88,12 +82,16 @@ int ProjectManager::GetInform()
 	for (itor = m_mapProject.begin(); itor != m_mapProject.end(); itor++)
 	{
 		 DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, itor->second.c_str());
-		AnalyzeProject((WCHAR*)itor->second.c_str());
 		
+		 WCHAR pPath[MAX_PATH] = {0, };
+		 wcscpy_s(pPath, MAX_PATH, itor->second.c_str());
+	
+		 AnalyzeProject((WCHAR*)pPath);
+
+		// c, cpp, h 파일 리스트를 맵에 담는다.
 		m_mapSolFiles.insert(pair<wstring, vector<wstring>>(itor->first.c_str(), m_vFilelist));
-
 		m_vFilelist.clear();
-
+		
 	}
 	DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, L"GetSlnInform_SUCCESS!!");
 
@@ -102,7 +100,6 @@ int ProjectManager::GetInform()
 
 int ProjectManager::GetProjectInform(WCHAR* pProjectPath)
 {
-	// DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, L"GetProjectInform");
 	
 	WCHAR szModuleName[MAX_PATH] = {0, };
 	WCHAR szProjectPath[MAX_PATH] = { 0, };
@@ -125,11 +122,14 @@ int ProjectManager::GetProjectInform(WCHAR* pProjectPath)
 
 int ProjectManager::AnalyzeProject(WCHAR* pProjectPath)
 {
+
+	DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, L"AnalyzeProject_Access");
+
 	if (NULL == pProjectPath)
 		return ERROR_INVALID_PARAMETER;
 
 	FILE* fp = NULL;
-	errno_t err = _wfopen_s(&fp, pProjectPath, L"rt");
+	errno_t err = _wfopen_s(&fp, pProjectPath, L"rt"); // or r+t
 
 	if (ERROR_SUCCESS != err || NULL == fp)
 	{
@@ -137,60 +137,144 @@ int ProjectManager::AnalyzeProject(WCHAR* pProjectPath)
 	}
 
 	WCHAR szLine[2048] = { 0, };
-
+	WCHAR szCopyLine[2048] = { 0, };
 	while (fgetws(szLine, 2048, fp) != NULL) {
 		
-		if (NULL == wcsstr(szLine, L"Include=\""))
-			continue;
+		if (NULL != wcsstr(szLine, L"<ClInclude Include=\"") or NULL != wcsstr(szLine, L"<ClCompile Include=\""))
+		{
 
-		if (NULL != wcsstr(szLine, L"<None Include=\""))
-			continue;
+			 WCHAR* pFind;
+		 pFind = wcsstr(szLine, L"Include=\"");
 
-		if (NULL != wcsstr(szLine, L"<ProjectConfiguration Include=\""))
-			continue;
+		 if (NULL != pFind)
+			 wcscpy_s(szLine, MAX_PATH, pFind + 9);
 
-		if (NULL != wcsstr(szLine, L"<ResourceCompile Include=\""))
-			continue;
+		 pFind = wcsstr(szLine, L"\"/>");
+		 if (NULL != pFind)
+			 *pFind = 0x00;
 
-		if (NULL != wcsstr(szLine, L"<Image Include=\""))
-			continue;
+		 pFind = wcsstr(szLine, L"\">");
+		 if (NULL != pFind)
+			 *pFind = 0x00;
 
-		if (NULL != wcsstr(szLine, L"<Text Include=\""))
-			continue;
+		 pFind = wcsstr(szLine, L"\" />");
+		 if (NULL != pFind)
+			 *pFind = 0x00;
+
+		 ChangeFullPath(szLine, pProjectPath);
 
 
-		WCHAR* pFind;
-		pFind = wcsstr(szLine, L"Include=\"");
 
-		if (NULL != pFind)
-			wcscpy_s(szLine, MAX_PATH, pFind + 9);
-	
-		pFind = wcsstr(szLine, L"\"/>");
-		if (NULL != pFind)
-			*pFind = 0x00;
+		 WCHAR* pDFind = wcsstr(szLine, L"Development\\");
+		 if (NULL != pDFind) {
+			 wcscpy_s(szLine, MAX_PATH, pDFind);
+		 }
 
-		pFind = wcsstr(szLine, L"\">");
-		if (NULL != pFind)
-			*pFind = 0x00;
-	
-		pFind = wcsstr(szLine, L"\" />");
-		if (NULL != pFind)
-			*pFind = 0x00;
+		 WCHAR* pSFind = wcsstr(szLine, L"SWork\\");
+		 if (NULL != pSFind)
+		 {
+			 wcscpy_s(szLine, MAX_PATH, pSFind);
+		 }
 
-		ChangeFullPath(szLine,pProjectPath);
+		  DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, szLine);
 
-		vector <wstring>::iterator it;
+		  // szLine copy
+			 ChangeSlash(szLine);
+			 
+			 // TODO : 벡터에 insert하기 전에 szLine이 map에 있는 벡터 value에 있는지 확인한다.
+				
+			 if (ERROR_SUCCESS == CheckDuplicate(szLine))
+			 {
+				 vector <wstring>::iterator it;
 
-		it = m_vFilelist.begin();
-		it = m_vFilelist.insert(it, szLine);
-
-		 SecureZeroMemory(szLine, 2048 * 2);
-
+				 it = m_vFilelist.begin();
+				 it = m_vFilelist.insert(it, szLine);
+			 }
+			  SecureZeroMemory(szLine, 2048 * 2);
+			
+		}
 	}
 
 	::fclose(fp);
 
 	return ERROR_SUCCESS;
+}
+
+int ProjectManager::ChangeSlash(WCHAR* pFilePath)
+{
+	DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, L"ChangeSlash");
+
+	if (NULL == pFilePath)
+		return ERROR_INVALID_PARAMETER;
+
+	// 벡터에 문자열 잘라서 담기
+
+	WCHAR pSrcLine[MAX_PATH] = { 0, };
+	WCHAR pDstLine[MAX_PATH] = { 0, };
+	WCHAR* buffer = NULL;
+	wcscpy_s(pSrcLine, MAX_PATH, pFilePath);
+	vector<wstring> m_vector;
+
+	WCHAR* temp = wcstok_s(pSrcLine, L"\\", &buffer);
+
+	while (temp != NULL)
+	{
+		m_vector.push_back(temp);
+		temp = wcstok_s(NULL, L"\\", &buffer);
+	}
+
+	vector<wstring>::iterator iter;
+
+	for (iter = m_vector.begin(); iter < m_vector.end(); iter++)
+	{
+			wcscat_s(pDstLine, iter->c_str());
+			if (iter != m_vector.end()-1) {
+				wcscat_s(pDstLine, L"/");
+			}
+		
+	}
+
+	DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, pDstLine);
+
+	wcscpy_s(pFilePath, MAX_PATH, pDstLine);
+
+	return ERROR_SUCCESS;
+}
+
+int ProjectManager::CheckDuplicate(WCHAR* pPath)
+{
+	if (NULL == pPath)
+		return ERROR_INVALID_PARAMETER;
+
+	WCHAR pLine[MAX_PATH] = { 0, };
+	wcscpy_s(pLine, MAX_PATH, pPath);
+
+	map<wstring, vector<wstring>>::iterator iter;
+	vector<wstring>::iterator viter;
+
+	for (viter = m_vFilelist.begin(); viter != m_vFilelist.end(); viter++)
+	{
+		if (viter->c_str() == (wstring)pLine)
+		{
+			DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, pLine);
+			return ERROR_INVALID_DATA;
+		}
+	}
+
+	for (iter = m_mapSolFiles.begin(); iter != m_mapSolFiles.end(); iter++)
+	{
+		for (viter = iter->second.begin(); viter != iter->second.end(); viter++)
+		{
+			if (viter->c_str() == (wstring)pLine)
+			{
+				DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__,pLine);
+				return ERROR_INVALID_DATA;
+			}
+		}
+	}
+
+	return ERROR_SUCCESS;
+
 }
 
 int ProjectManager::MakeCdprojFile(WCHAR* pPath, WCHAR* pProductName)
@@ -206,9 +290,11 @@ int ProjectManager::MakeCdprojFile(WCHAR* pPath, WCHAR* pProductName)
 
 		WCHAR szExistPath[MAX_PATH];	// 기존 파일 경로
 		WCHAR szModuleName[MAX_PATH];	// 새로 생성할 modulename.cdproj 파일 경로
-		WCHAR szProductName[MAX_PATH];	// 새로 생성할 제품명.cdproj 파일 경로
 		WCHAR szChangeLine[MAX_PATH];	// 변경할 내용
 		WCHAR szLine[MAX_PATH];
+		
+		WCHAR basedir[MAX_PATH] = L"_Analysis_BaseDir\\CodeAnalysis\\";
+		wcscat_s(basedir, MAX_PATH, pProductName);
 
 		GetModuleFileName(NULL, szExistPath, MAX_PATH);
 		WCHAR* pFindPath = wcsrchr(szExistPath, L'\\');
@@ -220,34 +306,59 @@ int ProjectManager::MakeCdprojFile(WCHAR* pPath, WCHAR* pProductName)
 
 		wcscpy_s(szModuleName, pPath);
 		wcscat_s(szModuleName, MAX_PATH, L"\\");
+		wcscat_s(szModuleName, MAX_PATH, pProductName);
+		_wmkdir(szModuleName);
+		wcscat_s(szModuleName, MAX_PATH, L"\\");
 		wcscat_s(szModuleName, MAX_PATH, iter->first.c_str());
 		wcscat_s(szModuleName, MAX_PATH, L".cdproj");
 
-		wcscpy_s(szProductName, pPath);
-		wcscat_s(szProductName, MAX_PATH, L"\\");
-		wcscat_s(szProductName, MAX_PATH, pProductName);
-		wcscat_s(szProductName, MAX_PATH, L".cdproj");
 
 		wcscpy_s(szChangeLine, iter->second.c_str());
 		wcscpy_s(szLine, L"_sourcesDirectory\\");
 
-		WCHAR* pFind = wcsstr(szChangeLine, L"TFS\\");
-		if (NULL != pFind)
-			wcscpy_s(szChangeLine, MAX_PATH, pFind + 4);
+			
+		WCHAR* pDFind = wcsstr(szChangeLine, L"Development\\");
+		if (NULL != pDFind) {
+			wcscpy_s(szChangeLine, MAX_PATH, pDFind);
 			wcscat_s(szChangeLine, L"??Release|x86");
 			wcscat_s(szLine, szChangeLine);
-			
+		}
+
+		WCHAR* pSFind = wcsstr(szChangeLine, L"SWork\\");
+		if (NULL != pSFind)
+		{
+			wcscpy_s(szChangeLine, MAX_PATH, pSFind);
+			wcscat_s(szChangeLine, L"??Release|x86");
+			wcscat_s(szLine, szChangeLine);
+		}
+
 		// Unicode를 Ansi code로 변환
 		size_t i;
 		char* str = (char*)malloc(MAX_PATH);
 		wcstombs_s(&i, str, MAX_PATH, szLine, MAX_PATH-1);
 
+		size_t j;
+		char* strProductname = (char*)malloc(MAX_PATH);
+		wcstombs_s(&j, strProductname, MAX_PATH, pProductName, MAX_PATH - 1);
+
+		size_t k;
+		char* str2 = (char*)malloc(MAX_PATH);
+		wcstombs_s(&k, str2, MAX_PATH, basedir, MAX_PATH - 1);
+
 		LoadXmlFile(szExistPath);
 
 		XMLElement* pRootElement = m_XMLDoc.FirstChildElement("NDepend");
 
+		pRootElement->SetAttribute("AppName", strProductname);
+
 		if (NULL != pRootElement)
 		{
+			XMLElement* pOutputElement = pRootElement->FirstChildElement("OutputDir");
+			if (NULL != pOutputElement)
+			{
+				pOutputElement->SetText(str2);
+			}
+
 			XMLElement* pProjectElement = pRootElement->FirstChildElement("Projects");
 			if (NULL != pProjectElement)
 			{
@@ -260,7 +371,6 @@ int ProjectManager::MakeCdprojFile(WCHAR* pPath, WCHAR* pProductName)
 			}
 		}
 		SaveXmlFile(szModuleName);
-		SaveXmlFile(szProductName);
 	}
 
 		return ERROR_SUCCESS;
@@ -287,9 +397,12 @@ int ProjectManager::MakePropertiesFile(WCHAR* pPath, WCHAR* pProductName)
 		return ERROR_OPEN_FAILED;
 	}
 
-	// TODO : 띄어쓰기 원본이랑 동일하게 변경
-	fputws(L"sonar.projectKey=SoftCamp.DocumentSecurity\n"
-		"sonar.projectName=DocumentSecurity\n"
+	// 원본이랑 동일하게
+	fputws(L"sonar.projectKey=SoftCamp.", fp);
+	fputws(pProductName, fp);
+	fputws(L"\nsonar.projectName=",fp);
+	fputws(pProductName, fp);
+	fputws(L"\n"
 		"sonar.projectVersion=1.0\n"
 		"sonar.sourceEncoding=x-windows-949\n"
 		"sonar.language=cxx\n"
@@ -333,7 +446,7 @@ int ProjectManager::MakePropertiesFile(WCHAR* pPath, WCHAR* pProductName)
 		fputws(L".sonar.inclusions=", fp);
 		
 			// .h, .cpp, .c 파일 포함
-		iter = m_mapSolFiles.find(itor->first.c_str());
+		iter = m_mapSolFiles.find(itor->first.c_str());	// mapProject에 모듈명과 같으면
 		if (iter != m_mapSolFiles.end()) {
 				for (int i = 0; i < iter->second.size(); i++)
 				{
@@ -342,6 +455,132 @@ int ProjectManager::MakePropertiesFile(WCHAR* pPath, WCHAR* pProductName)
 				}
 		}
 		
+		fputws(L"\n", fp);
+	}
+
+	::fclose(fp);
+
+	return ERROR_SUCCESS;
+}
+
+int ProjectManager::AddPropertiesFile(WCHAR* pPath, WCHAR* pProductName)
+{
+	DebugMsg(L" EJH %s(%d) : Debug Msg [%s]", __FUNCTIONW__, __LINE__, L"AddPropertiesFile");
+
+	FILE* fp1 = NULL;	// 원본
+	FILE* fp2 = NULL;	// 복사본
+	WCHAR szFilePath[MAX_PATH];
+	WCHAR sztempFilePath[MAX_PATH];
+	WCHAR szLine[2048] = { 0, };
+
+	wcscpy_s(szFilePath, MAX_PATH, pPath);
+	wcscat_s(szFilePath, L"\\");
+	wcscat_s(szFilePath, pProductName);
+	wcscat_s(szFilePath, L"_project.properties");
+	
+	wcscpy_s(sztempFilePath, MAX_PATH, pPath);
+	wcscat_s(sztempFilePath, L"\\");
+	wcscat_s(sztempFilePath, pProductName);
+	wcscat_s(sztempFilePath, L"_tempproject.properties");
+	
+	if ((_waccess(szFilePath, 00) != -1))
+	{
+		errno_t err1 = _wfopen_s(&fp1, szFilePath, L"r+t");
+
+		if (ERROR_SUCCESS != err1 || NULL == fp1)
+		{
+			return ERROR_OPEN_FAILED;
+		}
+
+		errno_t err2 = _wfopen_s(&fp2, sztempFilePath, L"w+t");
+
+		if (ERROR_SUCCESS != err2 || NULL == fp2)
+		{
+			return ERROR_OPEN_FAILED;
+		}
+
+		while (fgetws(szLine, MAX_PATH, fp1) != NULL)
+		{
+			fputws(szLine,fp2);
+			
+			if (NULL != wcsstr(szLine, L"sonar.modules="))
+			{
+				DebugMsg(L" EJH %s(%d) : Debug Msg [%s][%d]", __FUNCTIONW__, __LINE__, L"sonar.modules= Found");
+					
+				map<wstring, wstring>::iterator iter;
+				for (iter = m_mapProject.begin(); iter != m_mapProject.end(); iter++)
+				{
+					fputws(iter->first.c_str(), fp2);
+					fputws(L",", fp2);
+				}
+			}
+		}
+
+		::fclose(fp1);
+		::fclose(fp2);
+		
+		DeleteFileW(szFilePath);
+		_wrename(sztempFilePath, szFilePath);
+		AddData(pPath, pProductName);
+
+	}
+	else
+	{
+		MakePropertiesFile(pPath, pProductName);
+	}
+
+	return ERROR_SUCCESS;
+}
+
+// properties 파일 뒤에 내용을 추가한다.
+int ProjectManager::AddData(WCHAR* pPath, WCHAR* pProductName)
+{
+	FILE* fp = NULL;
+	WCHAR szFilePath[MAX_PATH];
+
+	wcscpy_s(szFilePath, MAX_PATH, pPath);
+	wcscat_s(szFilePath, L"\\");
+	wcscat_s(szFilePath, pProductName);
+	wcscat_s(szFilePath, L"_project.properties");
+
+	errno_t err2 = _wfopen_s(&fp, szFilePath, L"at");
+
+	if (ERROR_SUCCESS != err2 || NULL == fp)
+	{
+		return ERROR_OPEN_FAILED;
+	}
+	
+	map<wstring, wstring>::iterator itor;
+	map<wstring, vector<wstring>>::iterator iter;
+
+	for (itor = m_mapProject.begin(); itor != m_mapProject.end(); itor++)
+	{
+		fputws(itor->first.c_str(), fp);
+		fputws(L".sonar.projectBaseDir=_projectBaseDir", fp);
+		fputws(L"\n", fp);
+
+
+		fputws(itor->first.c_str(), fp);
+		fputws(L".sonar.sources=.", fp);
+		fputws(L"\n", fp);
+
+		fputws(itor->first.c_str(), fp);
+		fputws(L".sonar.exclusions=**//*.*", fp);
+		fputws(L"\n", fp);
+
+		fputws(itor->first.c_str(), fp);
+		fputws(L".sonar.inclusions=", fp);
+
+		// .h, .cpp, .c 파일 포함
+		iter = m_mapSolFiles.find(itor->first.c_str());
+		if (iter != m_mapSolFiles.end()) {
+			for (int i = 0; i < iter->second.size(); i++)
+			{
+				fputws(iter->second[i].c_str(), fp);
+				fputws(L",", fp);
+			}
+		}
+
 		fputws(L"\n", fp);
 	}
 
